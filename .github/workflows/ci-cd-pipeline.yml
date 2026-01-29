@@ -1,0 +1,113 @@
+name: Java CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  REPO_NAME: java-demo-cicd-pipeline
+  IMAGE_NAME: java-demo-cicd-pipeline-demo  # Change to your Artifactory later
+
+jobs:
+  maven_build:
+    name: Maven Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 11
+
+      - name: Build with Maven
+        run: |
+          echo "🔨 Building $REPO_NAME"
+          mvn clean package
+          echo "📦 Build output:"
+          ls -lh target/
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: java-jar
+          path: target/*.jar
+
+  sonarqube_scan:
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    needs: maven_build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 11
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: java-jar
+          path: target
+
+      - name: SonarQube Analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          echo "🔍 Running SonarQube for $REPO_NAME"
+          mvn sonar:sonar \
+            -Dsonar.projectKey=$REPO_NAME \
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+            -Dsonar.login=$SONAR_TOKEN
+
+  docker_build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: maven_build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: java-jar
+          path: target
+
+      - name: Build Docker image
+        run: |
+          IMAGE_TAG=$(git rev-parse --short HEAD)
+          echo "🐳 Building Docker image $IMAGE_NAME:$IMAGE_TAG"
+          docker build -t $IMAGE_NAME:$IMAGE_TAG .
+          echo "Docker images:"
+          docker images | grep java-demo
+
+      - name: Save IMAGE_TAG for next job
+        run: echo "IMAGE_TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+  inspect_image:
+    name: Inspect Docker Image
+    runs-on: ubuntu-latest
+    needs: docker_build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Inspect Docker image
+        run: |
+          echo "🔎 Inspecting Docker image $IMAGE_NAME:$IMAGE_TAG"
+          docker image inspect $IMAGE_NAME:$IMAGE_TAG
+          echo "📂 Listing files inside /app:"
+          docker run --rm $IMAGE_NAME:$IMAGE_TAG ls -lh /app
+          echo "🧱 Image layers:"
+          docker history $IMAGE_NAME:$IMAGE_TAG
+          echo "✅ Image ready to push to Artifactory"
