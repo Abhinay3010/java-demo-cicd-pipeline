@@ -1,0 +1,63 @@
+stages:
+  - build
+  - sonarqube
+  - docker
+  - inspect
+
+variables:
+  REPO_NAME: "java-demo-cicd-pipeline"
+  IMAGE_NAME: "artifactory.example.com/demo/java-demo-cicd-pipeline"
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+
+maven_build:
+  stage: build
+  image: maven:3.9.6-eclipse-temurin-11
+  script:
+    - echo "🔨 Building $REPO_NAME"
+    - mvn clean package
+    - echo "📦 Build output:"
+    - ls -lh target/
+  artifacts:
+    paths:
+      - target/*.jar
+
+sonarqube_scan:
+  stage: sonarqube
+  image: maven:3.9.6-eclipse-temurin-11
+  script:
+    - echo "🔍 SonarQube scan for $REPO_NAME"
+    - mvn sonar:sonar \
+        -Dsonar.projectKey=$REPO_NAME \
+        -Dsonar.projectName=$REPO_NAME \
+        -Dsonar.host.url=$SONAR_HOST_URL \
+        -Dsonar.login=$SONAR_TOKEN
+
+docker_build:
+  stage: docker
+  image: docker:25
+  services:
+    - docker:25-dind
+  script:
+    - echo "🐳 Building Docker image for $REPO_NAME"
+    - IMAGE_TAG=$(git rev-parse --short HEAD)
+    - echo "Using tag: $IMAGE_TAG"
+    - docker build -t $IMAGE_NAME:$IMAGE_TAG .
+    - docker images | grep java-demo-cicd-pipeline
+    - echo "IMAGE_TAG=$IMAGE_TAG" >> image.env
+  artifacts:
+    reports:
+      dotenv: image.env
+
+inspect_image:
+  stage: inspect
+  image: docker:25
+  services:
+    - docker:25-dind
+  script:
+    - echo "🔎 Inspecting Docker image"
+    - docker image inspect $IMAGE_NAME:$IMAGE_TAG
+    - echo "📂 Files inside container:"
+    - docker run --rm $IMAGE_NAME:$IMAGE_TAG ls -lh /app
+    - echo "🧱 Image layers:"
+    - docker history $IMAGE_NAME:$IMAGE_TAG
+    - echo "✅ Image ready to push to Artifactory"
