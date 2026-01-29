@@ -55,7 +55,7 @@ inspect_image:
     - docker:25-dind
   script:
     - echo "🔎 Inspecting Docker image"
-    - docker image inspect $IMAGE_NAME:$IMAGE_TAG
+    - docker image inspect $IMAGE_NAME:$IMAGE_TAG 
     - echo "📂 Files inside container:"
     - docker run --rm $IMAGE_NAME:$IMAGE_TAG ls -lh /app
     - echo "🧱 Image layers:"
