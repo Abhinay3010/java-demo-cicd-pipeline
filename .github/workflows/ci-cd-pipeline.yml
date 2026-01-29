@@ -34,7 +34,7 @@ jobs:
           ls -lh target/
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: java-jar
           path: target/*.jar
@@ -54,7 +54,7 @@ jobs:
           java-version: 11
 
       - name: Download build artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: java-jar
           path: target
@@ -66,6 +66,7 @@ jobs:
           echo "🔍 Running SonarQube for $REPO_NAME"
           mvn sonar:sonar \
             -Dsonar.projectKey=$REPO_NAME \
+            -Dsonar.projectName=$REPO_NAME \
             -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
             -Dsonar.login=$SONAR_TOKEN
 
@@ -78,7 +79,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Download build artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: java-jar
           path: target
@@ -90,9 +91,7 @@ jobs:
           docker build -t $IMAGE_NAME:$IMAGE_TAG .
           echo "Docker images:"
           docker images | grep java-demo
-
-      - name: Save IMAGE_TAG for next job
-        run: echo "IMAGE_TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
   inspect_image:
     name: Inspect Docker Image
